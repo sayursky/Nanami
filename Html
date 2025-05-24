@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game Kuis dengan Timer, Animasi, Suara, dan Mode Malam</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    max-width: 600px;
+    margin: auto;
+    background: #fff;
+    color: #000;
+    transition: background-color 0.5s, color 0.5s;
+  }
+  body.dark {
+    background: #121212;
+    color: #eee;
+  }
+  #login, #game, #admin, #adminLogin {
+    display: none;
+  }
+  button {
+    padding: 10px 15px;
+    margin-top: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  button:hover {
+    background-color: #ddd;
+  }
+  body.dark button:hover {
+    background-color: #333;
+    color: #eee;
+  }
+  .hidden {
+    display: none;
+  }
+  .question {
+    font-weight: bold;
+    margin-bottom: 10px;
+    opacity: 1;
+    transition: opacity 0.5s;
+  }
+  .fade-out {
+    opacity: 0;
+  }
+  .answer {
+    margin: 5px 0;
+    width: 100%;
+  }
+  #adminArea {
+    margin-top: 20px;
+    border: 1px solid #ccc;
+    padding: 15px;
+  }
+  label {
+    display: block;
+    margin-top: 10px;
+  }
+  #timer {
+    font-weight: bold;
+    margin-top: 10px;
+  }
+  #darkModeToggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Game Kuis</h1>
+<button id="darkModeToggle">Toggle Mode Malam</button>
+
+<!-- Login Username -->
+<div id="login">
+  <label>Masukkan Username:</label>
+  <input type="text" id="usernameInput" />
+  <button id="loginBtn">Mulai</button>
+  <br/><br/>
+  <button id="adminLoginBtn">Admin Login</button>
+</div>
+
+<!-- Game Area -->
+<div id="game">
+  <div>Halo, <span id="usernameDisplay"></span>! Skor: <span id="scoreDisplay">0</span></div>
+  <div id="timer">Waktu tersisa: <span id="timerCount">15</span> detik</div>
+  <div class="question" id="questionText"></div>
+  <div id="answers"></div>
+  <button id="nextBtn" class="hidden">Soal Berikutnya</button>
+</div>
+
+<!-- Admin Login -->
+<div id="adminLogin" class="hidden">
+  <label>Masukkan Kode Admin:</label>
+  <input type="password" id="adminKeyInput" />
+  <button id="adminKeyBtn">Masuk Admin</button>
+  <button id="adminCancelBtn">Batal</button>
+  <div id="adminLoginMsg"></div>
+</div>
+
+<!-- Admin Panel -->
+<div id="admin" class="hidden">
+  <h2>Admin Panel</h2>
+  <div id="adminArea">
+    <label>Soal Baru:</label>
+    <input type="text" id="newQuestion" placeholder="Masukkan pertanyaan" style="width: 100%;" />
+    <label>Jawaban 1:</label>
+    <input type="text" id="newAnswer1" />
+    <label>Jawaban 2:</label>
+    <input type="text" id="newAnswer2" />
+    <label>Jawaban 3:</label>
+    <input type="text" id="newAnswer3" />
+    <label>Jawaban 4:</label>
+    <input type="text" id="newAnswer4" />
+    <label>Jawaban Benar (1-4):</label>
+    <input type="number" id="newCorrect" min="1" max="4" />
+    <button id="addQuestionBtn">Tambah Soal</button>
+    <button id="adminLogoutBtn">Logout Admin</button>
+    <div id="adminMsg"></div>
+  </div>
+</div>
+
+<!-- Suara -->
+<audio id="soundCorrect" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="soundWrong" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
+<audio id="soundTimeout" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+<script>
+(() => {
+  const defaultQuestions = [
+    { question: "Ibukota Indonesia adalah?", answers: ["Jakarta", "Bandung", "Surabaya", "Medan"], correct: 1 },
+    { question: "Pahlawan nasional yang terkenal dengan sebutan 'Bung Karno' adalah?", answers: ["Soekarno", "Hatta", "Sudirman", "Kartini"], correct: 1 },
+    { question: "Apa bahasa pemrograman yang digunakan untuk membuat website?", answers: ["Python", "JavaScript", "C++", "Java"], correct: 2 }
+  ];
+
+  const loginDiv = document.getElementById('login');
+  const gameDiv = document.getElementById('game');
+  const adminDiv = document.getElementById('admin');
+  const adminLoginDiv = document.getElementById('adminLogin');
+  const usernameInput = document.getElementById('usernameInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const adminLoginBtn = document.getElementById('adminLoginBtn');
+  const usernameDisplay = document.getElementById('usernameDisplay');
+  const scoreDisplay = document.getElementById('scoreDisplay');
+  const questionText = document.getElementById('questionText');
+  const answersDiv = document.getElementById('answers');
+  const nextBtn = document.getElementById('nextBtn');
+  const adminKeyInput = document.getElementById('adminKeyInput');
+  const adminKeyBtn = document.getElementById('adminKeyBtn');
+  const adminCancelBtn = document.getElementById('adminCancelBtn');
+  const adminMsg = document.getElementById('adminMsg');
+  const newQuestion = document.getElementById('newQuestion');
+  const newAnswer1 = document.getElementById('newAnswer1');
+  const newAnswer2 = document.getElementById('newAnswer2');
+  const newAnswer3 = document.getElementById('newAnswer3');
+  const newAnswer4 = document.getElementById('newAnswer4');
+  const newCorrect = document.getElementById('newCorrect');
+  const addQuestionBtn = document.getElementById('addQuestionBtn');
+  const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+  const adminLoginMsg = document.getElementById('adminLoginMsg');
+  const timerCountSpan = document.getElementById('timerCount');
+  const timerDiv = document.getElementById('timer');
+  const darkModeToggle = document.getElementById('darkModeToggle');
+
+  const soundCorrect = document.getElementById('soundCorrect');
+  const soundWrong = document.getElementById('soundWrong');
+  const soundTimeout = document.getElementById('soundTimeout');
+
+  let questions = [];
+  let currentUser = null;
+  let score = 0;
+  let currentQuestionIndex = null;
+  let askedQuestions = [];
+  let timer = null;
+  const timePerQuestion = 15;
+  let timeLeft = timePerQuestion;
+  let canAnswer = true;
+
+  function loadQuestions() {
+    const saved = localStorage.getItem('kuisQuestions');
+    if (saved) {
+      try {
+        questions = JSON.parse(saved);
+      } catch {
+        questions = defaultQuestions;
+      }
+    } else {
+      questions = defaultQuestions;
+    }
+  }
+
+  function saveQuestions() {
+    localStorage.setItem('kuisQuestions', JSON.stringify(questions));
+  }
+
+  function loadUserProgress(username) {
+    const data = localStorage.getItem(`kuisUser_${username}`);
+    if (data) {
+      try {
+        const obj = JSON.parse(data);
+        score = obj.score || 0;
+        askedQuestions = obj.askedQuestions || [];
+      } catch {
+        score = 0;
+        askedQuestions = [];
+      }
+    } else {
+      score = 0;
+      askedQuestions = [];
+    }
+  }
+
+  function saveUserProgress() {
+    if (!currentUser) return;
+    const data = { score, askedQuestions };
+    localStorage.setItem(`kuisUser_${currentUser}`, JSON.stringify(data));
+  }
+
+  function getNextQuestion() {
+    const remainingIndexes = questions.map((_, i) => i).filter(i => !askedQuestions.includes(i));
+    if (remainingIndexes.length === 0) return null;
+    return remainingIndexes[Math.floor(Math.random() * remainingIndexes.length)];
+  }
+
+  function disableAnswers() {
+    const btns = answersDiv.querySelectorAll('button');
+    btns.forEach(b => {
+      b.disabled = true;
+      b.style.cursor = 'default';
+    });
+    canAnswer = false;
+  }
+
+  function enableAnswers() {
+    const btns = answersDiv.querySelectorAll('button');
+    btns.forEach(b => {
+      b.disabled = false;
+      b.style.cursor = 'pointer';
+    });
+    canAnswer = true;
+  }
+
+  // Fungsi animasi fade out dan fade in soal
+  function fadeOutInQuestion(newIndex) {
+    questionText.classList.add('fade-out');
+    answersDiv.classList.add('fade-out');
+    timerDiv.classList.add('fade-out');
+
+    setTimeout(() => {
+      showQuestion(newIndex);
+      questionText.classList.remove('fade-out');
+      answersDiv.classList.remove('fade-out');
+      timerDiv.classList.remove('fade-out');
+    }, 500);
+  }
+
+  function startTimer() {
+    clearInterval(timer);
+    timeLeft = timePerQuestion;
+    timerCountSpan.textContent = timeLeft;
+    timerDiv.style.color = '';
+    timer = setInterval(() => {
+      timeLeft--;
+      timerCountSpan.textContent = timeLeft;
+      if (timeLeft <= 5) {
+        timerDiv.style.color = 'red';
+      } else {
+        timerDiv.style.color = '';
+      }
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        soundTimeout.play();
+        // Timeout, disable jawaban dan lanjut soal berikutnya
+        disableAnswers();
+        nextBtn.classList.remove('hidden');
+      }
+    }, 1000);
+  }
+
+  function showQuestion(index) {
+    currentQuestionIndex = index;
+    canAnswer = true;
+    enableAnswers();
+    const q = questions[index];
+    questionText.textContent = q.question;
+    answersDiv.innerHTML = '';
+    nextBtn.classList.add('hidden');
+
+    q.answers.forEach((answer, i) => {
+      const btn = document.createElement('button');
+      btn.textContent = answer;
+      btn.classList.add('answer');
+      btn.onclick = () => {
+        if (!canAnswer) return;
+        clearInterval(timer);
+        if (i + 1 === q.correct) {
+          score++;
+          scoreDisplay.textContent = score;
+          soundCorrect.play();
+        } else {
+          soundWrong.play();
+        }
+        askedQuestions.push(index);
+        saveUserProgress();
+        disableAnswers();
+        nextBtn.classList.remove('hidden');
+      };
+      answersDiv.appendChild(btn);
+    });
+
+    timerDiv.style.color = '';
+    startTimer();
+  }
+
+  function startGame() {
+    loginDiv.style.display = 'none';
+    adminLoginDiv.classList.add('hidden');
+    adminDiv.style.display = 'none';
+    gameDiv.style.display = 'block';
+    usernameDisplay.textContent = currentUser;
+    scoreDisplay.textContent = score;
+
+    const nextQ = getNextQuestion();
+    if (nextQ === null) {
+      questionText.textContent = "Selamat! Kamu sudah menjawab semua soal.";
+      answersDiv.innerHTML = '';
+      nextBtn.style.display = 'none';
+      timerDiv.style.display = 'none';
+      return;
+    }
+    timerDiv.style.display = 'block';
+    fadeOutInQuestion(nextQ);
+  }
+
+  loginBtn.addEventListener('click', () => {
+    const username = usernameInput.value.trim();
+    if (!username) {
+      alert('Masukkan username terlebih dahulu!');
+      return;
+    }
+    currentUser = username;
+    loadUserProgress(username);
+    startGame();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    const nextQ = getNextQuestion();
+    if (nextQ === null) {
+      questionText.textContent = "Selamat! Kamu sudah menjawab semua soal.";
+      answersDiv.innerHTML = '';
+      nextBtn.style.display = 'none';
+      timerDiv.style.display = 'none';
+      return;
+    }
+    fadeOutInQuestion(nextQ);
+  });
+
+  adminLoginBtn.addEventListener('click', () => {
+    loginDiv.style.display = 'none';
+    adminLoginDiv.classList.remove('hidden');
+    adminLoginMsg.textContent = '';
+    adminKeyInput.value = '';
+  });
+
+  adminCancelBtn.addEventListener('click', () => {
+    adminLoginDiv.classList.add('hidden');
+    loginDiv.style.display = 'block';
+  });
+
+  adminKeyBtn.addEventListener('click', () => {
+    const key = adminKeyInput.value.trim();
+    if (key === '2025AB') {
+      adminLoginDiv.classList.add('hidden');
+      adminDiv.style.display = 'block';
+      adminMsg.textContent = '';
+      clearAdminInputs();
+    } else {
+      adminLoginMsg.textContent = 'Kode admin salah!';
+      adminLoginMsg.style.color = 'red';
+    }
+  });
+
+  function clearAdminInputs() {
+    newQuestion.value = '';
+    newAnswer1.value = '';
+    newAnswer2.value = '';
+    newAnswer3.value = '';
+    newAnswer4.value = '';
+    newCorrect.value = '';
+  }
+
+  addQuestionBtn.addEventListener('click', () => {
+    const q = newQuestion.value.trim();
+    const a1 = newAnswer1.value.trim();
+    const a2 = newAnswer2.value.trim();
+    const a3 = newAnswer3.value.trim();
+    const a4 = newAnswer4.value.trim();
+    const c = parseInt(newCorrect.value);
+
+    if (!q || !a1 || !a2 || !a3 || !a4 || ![1,2,3,4].includes(c)) {
+      adminMsg.textContent = 'Mohon isi semua field dengan benar.';
+      adminMsg.style.color = 'red';
+      return;
+    }
+
+    questions.push({
+      question: q,
+      answers: [a1, a2, a3, a4],
+      correct: c
+    });
+
+    saveQuestions();
+    adminMsg.textContent = 'Soal berhasil ditambahkan!';
+    adminMsg.style.color = 'green';
+    clearAdminInputs();
+  });
+
+  adminLogoutBtn.addEventListener('click', () => {
+    adminDiv.style.display = 'none';
+    loginDiv.style.display = 'block';
+  });
+
+  // Mode malam toggle
+  darkModeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+  });
+
+  function init() {
+    loadQuestions();
+    loginDiv.style.display = 'block';
+  }
+
+  init();
+})();
+</script>
+
+</body>
+</html>
